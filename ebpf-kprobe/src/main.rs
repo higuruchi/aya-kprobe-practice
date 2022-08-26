@@ -6,9 +6,10 @@ use aya_log::BpfLogger;
 use bytes::BytesMut;
 use clap::Parser;
 use log::info;
+use std::str::from_utf8;
 use tokio::{signal, task};
 
-use ebpf_kprobe_common::ProcessData;
+use ebpf_kprobe_common::FileData;
 
 #[derive(Debug, Parser)]
 struct Opt {}
@@ -34,27 +35,34 @@ async fn main() -> Result<(), anyhow::Error> {
     BpfLogger::init(&mut bpf)?;
     let program: &mut KProbe = bpf.program_mut("ebpf_kprobe").unwrap().try_into()?;
     program.load()?;
-    println!("fuga");
     program.attach("vfs_open", 0)?;
-    println!("hoge");
 
     let mut perf_array = AsyncPerfEventArray::try_from(bpf.map_mut("EVENTS")?)?;
 
-    for cpu_id in online_cpus()? { 
+    for cpu_id in online_cpus()? {
         let mut buf = perf_array.open(cpu_id, None)?;
 
         task::spawn(async move {
             let mut buffers = (0..10)
                 .map(|_| BytesMut::with_capacity(1024))
                 .collect::<Vec<_>>();
-
             loop {
                 let events = buf.read_events(&mut buffers).await.unwrap();
                 for i in 0..events.read {
                     let buf = &mut buffers[i];
-                    let ptr = buf.as_ptr() as *const ProcessData;
+                    let ptr = buf.as_ptr() as *const FileData;
                     let data = unsafe { ptr.read_unaligned() };
-                    println!("task pid: {:?}", data);
+                    println!(
+                        "file_data: pid: {}, pgid: {}, uid: {}, path: {} ",
+                        data.pid,
+                        data.pgid,
+                        data.uid,
+                        format!(
+                            "{}/{}",
+                            from_utf8(&data.d_parent).unwrap(),
+                            from_utf8(&data.name).unwrap()
+                        )
+                    );
                 }
             }
         });

@@ -1,12 +1,16 @@
 #![no_std]
 
-// use aya_bpf::cty::c_uint;
+use aya_bpf::cty::{c_uchar, c_uint};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct ProcessData {
-    pub pid: u32,       // Process ID
+pub struct FileData {
+    pub pid: c_uint,
+    pub pgid: c_uint,
+    pub uid: c_uint, // Process ID
+    pub d_parent: [c_uchar; 32usize],
+    pub name: [c_uchar; 32usize],
 }
 
 #[cfg(feature = "user")]
-unsafe impl aya::Pod for ProcessData {}
+unsafe impl aya::Pod for FileData {}
